@@ -78,17 +78,6 @@ class pyndarray(object):
             block_size *= self.shape[dim_index]
         self.values[offset] = value
 
-def add(lhs:int, rhs:int) -> int:
-    return lhs+rhs
-
-# @micropython.native
-# def add_native(lhs:int, rhs:int) -> int:
-#     return lhs+rhs
-# 
-# @micropython.viper
-# def add_viper(lhs:int, rhs:int) -> int:
-#     return lhs+rhs
-
 def test(ndarray):
     a = ndarray((3,4))
     assert a.ndim == 2, 'a.ndim'
@@ -125,12 +114,6 @@ def test(ndarray):
             print(m[x,y], end=' ')
         print()
 
-def process_add(add_func):
-    for i in range(500000):
-        a = 1
-        b = -3
-        add_func(a, b)
-
 def process(ndarray):
     for i in range(10000):
         a = ndarray((4,4))
@@ -144,37 +127,13 @@ def process(ndarray):
             2, 3, 4, 5,])
         d = a * a
 
-import ufastmath
+import fastmath
 print('Test pyndarray')
 test(pyndarray)
-print('Test ufastmath')
-test(ufastmath.ndarray)
+print('Test fastmath')
+test(fastmath.ndarray)
 
 import utime as time
-
-print('Bench python add')
-gc.collect()
-gc.collect()
-t = time.ticks_ms()
-process_add(add)
-print(time.ticks_ms() - t) 
-
-# print('Bench python add native')
-# t = time.ticks_ms()
-# process_add(add_native)
-# print(time.ticks_ms() - t)
-# 
-# print('Bench python add viper')
-# t = time.ticks_ms()
-# process_add(add_viper)
-# print(time.ticks_ms() - t)
-
-print('Bench ufastmath add')
-gc.collect()
-gc.collect()
-t = time.ticks_ms()
-process_add(ufastmath.add)
-print(time.ticks_ms() - t) 
 
 print('Bench pyndarray')
 gc.collect()
@@ -183,9 +142,9 @@ t = time.ticks_ms()
 process(pyndarray)
 print(time.ticks_ms() - t)
 
-print('Bench ufastmath')
+print('Bench fastmath')
 gc.collect()
 gc.collect()
 t = time.ticks_ms()
-process(ufastmath.ndarray)
+process(fastmath.ndarray)
 print(time.ticks_ms() - t)
