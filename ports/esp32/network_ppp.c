@@ -57,7 +57,6 @@ typedef struct _ppp_if_obj_t {
     mp_obj_t user_name;
     mp_obj_t password;
     uint8_t auth_type;
-    bool use_peer_dns;
 } ppp_if_obj_t;
 
 const mp_obj_type_t ppp_if_type;
@@ -83,13 +82,12 @@ static void ppp_status_cb(ppp_pcb *pcb, int err_code, void *ctx) {
 
 
 STATIC mp_obj_t ppp_make_new(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
-    enum { ARG_stream, ARG_auth_method, ARG_user_name, ARG_password, ARG_use_peer_dns };
+    enum { ARG_stream, ARG_auth_method, ARG_user_name, ARG_password };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_stream, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_obj = MP_OBJ_NULL} },
         { MP_QSTR_auth_method, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
         { MP_QSTR_user_name, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
         { MP_QSTR_password, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_use_peer_dns, MP_ARG_KW_ONLY | MP_ARG_BOOL, {.u_bool = true} },
     };
 
     mp_arg_val_t parsed_args[MP_ARRAY_SIZE(allowed_args)];
@@ -138,7 +136,6 @@ STATIC mp_obj_t ppp_make_new(size_t n_args, const mp_obj_t *args, mp_map_t *kw_a
     self->auth_type = auth_type;
     self->user_name = user_name;
     self->password = password;
-    self->use_peer_dns = parsed_args[ARG_use_peer_dns].u_bool;
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -190,7 +187,8 @@ STATIC mp_obj_t ppp_active(size_t n_args, const mp_obj_t *args) {
                 mp_raise_msg(&mp_type_RuntimeError, "set default failed");
             }
             
-            ppp_set_usepeerdns(self->pcb, self->use_peer_dns);
+            ppp_set_usepeerdns(self->pcb, true);
+            
             if (pppapi_connect(self->pcb, 0) != ESP_OK ) {
                 pppapi_free(self->pcb);
                 self->pcb = NULL;
