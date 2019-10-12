@@ -106,8 +106,13 @@ bool mp_repl_continue_with_input(const char *input) {
         }
     }
 
-    // continue if unmatched brackets or quotes
-    if (n_paren > 0 || n_brack > 0 || n_brace > 0 || in_quote == Q_3_SINGLE || in_quote == Q_3_DOUBLE) {
+    // continue if unmatched 3-quotes
+    if (in_quote == Q_3_SINGLE || in_quote == Q_3_DOUBLE) {
+        return true;
+    }
+
+    // continue if unmatched brackets, but only if not in a 1-quote
+    if ((n_paren > 0 || n_brack > 0 || n_brace > 0) && in_quote == Q_NONE) {
         return true;
     }
 
@@ -154,7 +159,7 @@ size_t mp_repl_autocomplete(const char *str, size_t len, const mp_print_t *print
         if (str < top) {
             // a complete word, lookup in current object
             qstr q = qstr_find_strn(s_start, s_len);
-            if (q == MP_QSTR_NULL) {
+            if (q == MP_QSTRnull) {
                 // lookup will fail
                 return 0;
             }

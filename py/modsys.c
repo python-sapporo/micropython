@@ -35,9 +35,12 @@
 #include "py/smallint.h"
 #include "py/runtime.h"
 
-#if MICROPY_PY_SYS
+#if MICROPY_PY_SYS_SETTRACE
+#include "py/objmodule.h"
+#include "py/profile.h"
+#endif
 
-#include "genhdr/mpversion.h"
+#if MICROPY_PY_SYS
 
 // defined per port; type of these is irrelevant, just need pointer
 extern struct _mp_dummy_t mp_sys_stdin_obj;
@@ -106,7 +109,8 @@ STATIC mp_obj_t mp_sys_print_exception(size_t n_args, const mp_obj_t *args) {
     #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
     void *stream_obj = &mp_sys_stdout_obj;
     if (n_args > 1) {
-        stream_obj = MP_OBJ_TO_PTR(args[1]); // XXX may fail
+        mp_get_stream_raise(args[1], MP_STREAM_OP_WRITE);
+        stream_obj = MP_OBJ_TO_PTR(args[1]);
     }
 
     mp_print_t print = {stream_obj, mp_stream_write_adaptor};
@@ -147,6 +151,24 @@ STATIC mp_obj_t mp_sys_getsizeof(mp_obj_t obj) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_sys_getsizeof_obj, mp_sys_getsizeof);
 #endif
 
+#if MICROPY_PY_SYS_ATEXIT
+// atexit(callback): Callback is called when sys.exit is called.
+STATIC mp_obj_t mp_sys_atexit(mp_obj_t obj) {
+    mp_obj_t old = MP_STATE_VM(sys_exitfunc);
+    MP_STATE_VM(sys_exitfunc) = obj;
+    return old;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_sys_atexit_obj, mp_sys_atexit);
+#endif
+
+#if MICROPY_PY_SYS_SETTRACE
+// settrace(tracefunc): Set the system’s trace function.
+STATIC mp_obj_t mp_sys_settrace(mp_obj_t obj) {
+    return mp_prof_settrace(obj);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(mp_sys_settrace_obj, mp_sys_settrace);
+#endif // MICROPY_PY_SYS_SETTRACE
+
 STATIC const mp_rom_map_elem_t mp_module_sys_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_sys) },
 
@@ -181,6 +203,10 @@ STATIC const mp_rom_map_elem_t mp_module_sys_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mp_sys_exit_obj) },
     #endif
 
+    #if MICROPY_PY_SYS_SETTRACE
+    { MP_ROM_QSTR(MP_QSTR_settrace), MP_ROM_PTR(&mp_sys_settrace_obj) },
+    #endif
+
     #if MICROPY_PY_SYS_STDFILES
     { MP_ROM_QSTR(MP_QSTR_stdin), MP_ROM_PTR(&mp_sys_stdin_obj) },
     { MP_ROM_QSTR(MP_QSTR_stdout), MP_ROM_PTR(&mp_sys_stdout_obj) },
@@ -202,6 +228,9 @@ STATIC const mp_rom_map_elem_t mp_module_sys_globals_table[] = {
      */
 
     { MP_ROM_QSTR(MP_QSTR_print_exception), MP_ROM_PTR(&mp_sys_print_exception_obj) },
+    #if MICROPY_PY_SYS_ATEXIT
+    { MP_ROM_QSTR(MP_QSTR_atexit), MP_ROM_PTR(&mp_sys_atexit_obj) },
+    #endif
 };
 
 STATIC MP_DEFINE_CONST_DICT(mp_module_sys_globals, mp_module_sys_globals_table);

@@ -1,12 +1,29 @@
+# Select the board to build for: if not given on the command line,
+# then default to GENERIC.
+BOARD ?= GENERIC
+
+# If the build directory is not given, make it reflect the board name.
+BUILD ?= build-$(BOARD)
+
+BOARD_DIR ?= boards/$(BOARD)
+ifeq ($(wildcard $(BOARD_DIR)/.),)
+$(error Invalid BOARD specified: $(BOARD_DIR))
+endif
+
 include ../../py/mkenv.mk
+
+# Optional
+-include $(BOARD_DIR)/mpconfigboard.mk
 
 # qstr definitions (must come before including py.mk)
 QSTR_DEFS = qstrdefsport.h #$(BUILD)/pins_qstr.h
+QSTR_GLOBAL_DEPENDENCIES = $(BOARD_DIR)/mpconfigboard.h
 
 MICROPY_PY_USSL = 1
 MICROPY_SSL_AXTLS = 1
-MICROPY_FATFS = 1
-MICROPY_PY_BTREE = 1
+AXTLS_DEFS_EXTRA = -Dabort=abort_ -DRT_MAX_PLAIN_LENGTH=1024 -DRT_EXTRA=4096
+MICROPY_FATFS ?= 1
+MICROPY_PY_BTREE ?= 1
 BTREE_DEFS_EXTRA = -DDEFPSIZE=1024 -DMINCACHE=3
 
 FROZEN_DIR ?= scripts
@@ -39,10 +56,10 @@ CFLAGS_XTENSA = -fsingle-precision-constant -Wdouble-promotion \
 	-DLWIP_OPEN_SRC
 
 CFLAGS = $(INC) -Wall -Wpointer-arith -Werror -std=gnu99 -nostdlib -DUART_OS=$(UART_OS) \
-	$(CFLAGS_XTENSA) $(CFLAGS_MOD) $(COPT) $(CFLAGS_EXTRA)
+	$(CFLAGS_XTENSA) $(CFLAGS_MOD) $(COPT) $(CFLAGS_EXTRA) -I$(BOARD_DIR)
 
-LDSCRIPT = esp8266.ld
-LDFLAGS = -nostdlib -T $(LDSCRIPT) -Map=$(@:.elf=.map) --cref
+LD_FILES ?= boards/esp8266.ld
+LDFLAGS = -nostdlib -T $(LD_FILES) -Map=$(@:.elf=.map) --cref
 LIBS = -L$(ESP_SDK)/lib -lmain -ljson -llwip_open -lpp -lnet80211 -lwpa -lphy -lnet80211 $(LDFLAGS_MOD)
 
 LIBGCC_FILE_NAME = $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
@@ -57,6 +74,9 @@ CFLAGS += -fdata-sections -ffunction-sections
 COPT += -Os -DNDEBUG
 LDFLAGS += --gc-sections
 endif
+
+# Options for mpy-cross
+MPY_CROSS_FLAGS += -march=xtensa
 
 SRC_C = \
 	strtoll.c \
@@ -88,6 +108,7 @@ SRC_C = \
 	fatfs_port.c \
 	posix_helpers.c \
 	hspi.c \
+	$(wildcard $(BOARD_DIR)/*.c) \
 	$(SRC_MOD)
 
 EXTMOD_SRC_C = $(addprefix extmod/,\
@@ -126,7 +147,7 @@ LIB_SRC_C = $(addprefix lib/,\
 ifeq ($(MICROPY_FATFS), 1)
 LIB_SRC_C += \
 	lib/oofatfs/ff.c \
-	lib/oofatfs/option/unicode.c
+	lib/oofatfs/ffunicode.c
 endif
 
 DRIVERS_SRC_C = $(addprefix drivers/,\
@@ -150,7 +171,7 @@ SRC_QSTR += $(SRC_C) $(EXTMOD_SRC_C) $(LIB_SRC_C) $(DRIVERS_SRC_C)
 # Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
-all: $(BUILD)/libaxtls.a $(FWBIN)
+all: $(FWBIN)
 
 CONFVARS_FILE = $(BUILD)/confvars
 
@@ -188,24 +209,12 @@ $(BUILD)/firmware.elf: $(OBJ)
 	$(Q)$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 	$(Q)$(SIZE) $@
 
-512k:
-	$(MAKE) LDSCRIPT=esp8266_512k.ld CFLAGS_EXTRA='-DMP_CONFIGFILE="<mpconfigport_512k.h>"' MICROPY_FATFS=0 MICROPY_PY_BTREE=0
-
 ota:
 	rm -f $(BUILD)/firmware.elf $(BUILD)/firmware.elf*.bin
-	$(MAKE) LDSCRIPT=esp8266_ota.ld FWBIN=$(BUILD)/firmware-ota.bin
+	$(MAKE) LD_FILES=boards/esp8266_ota.ld FWBIN=$(BUILD)/firmware-ota.bin
 
 include $(TOP)/py/mkrules.mk
 
-axtls: $(BUILD)/libaxtls.a
-
-$(BUILD)/libaxtls.a:
-	cd $(TOP)/lib/axtls; cp config/upyconfig config/.config
-	cd $(TOP)/lib/axtls; $(MAKE) oldconfig -B
-	cd $(TOP)/lib/axtls; $(MAKE) clean
-	cd $(TOP)/lib/axtls; $(MAKE) all CC="$(CC)" LD="$(LD)" AR="$(AR)" CFLAGS_EXTRA="$(CFLAGS_XTENSA) -Dabort=abort_ -DRT_MAX_PLAIN_LENGTH=1024 -DRT_EXTRA=4096"
-	cp $(TOP)/lib/axtls/_stage/libaxtls.a $@
-
 clean-modules:
 	git clean -f -d modules
-	rm -f build/frozen*.c
+	rm -f $(BUILD)/frozen*.c

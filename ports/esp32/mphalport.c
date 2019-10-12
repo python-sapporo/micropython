@@ -31,16 +31,33 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#if MICROPY_ESP_IDF_4
+#include "esp32/rom/uart.h"
+#else
 #include "rom/uart.h"
+#endif
 
 #include "py/obj.h"
+#include "py/stream.h"
 #include "py/mpstate.h"
 #include "py/mphal.h"
 #include "extmod/misc.h"
 #include "lib/utils/pyexec.h"
+#include "mphalport.h"
+
+TaskHandle_t mp_main_task_handle;
 
 STATIC uint8_t stdin_ringbuf_array[256];
 ringbuf_t stdin_ringbuf = {stdin_ringbuf_array, sizeof(stdin_ringbuf_array)};
+
+uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
+    uintptr_t ret = 0;
+    if ((poll_flags & MP_STREAM_POLL_RD) && stdin_ringbuf.iget != stdin_ringbuf.iput) {
+        ret |= MP_STREAM_POLL_RD;
+    }
+    return ret;
+}
 
 int mp_hal_stdin_rx_chr(void) {
     for (;;) {
@@ -49,7 +66,7 @@ int mp_hal_stdin_rx_chr(void) {
             return c;
         }
         MICROPY_EVENT_POLL_HOOK
-        vTaskDelay(1);
+        ulTaskNotifyTake(pdFALSE, 1);
     }
 }
 
@@ -58,11 +75,17 @@ void mp_hal_stdout_tx_str(const char *str) {
 }
 
 void mp_hal_stdout_tx_strn(const char *str, uint32_t len) {
-    MP_THREAD_GIL_EXIT();
+    // Only release the GIL if many characters are being sent
+    bool release_gil = len > 20;
+    if (release_gil) {
+        MP_THREAD_GIL_EXIT();
+    }
     for (uint32_t i = 0; i < len; ++i) {
         uart_tx_one_char(str[i]);
     }
-    MP_THREAD_GIL_ENTER();
+    if (release_gil) {
+        MP_THREAD_GIL_ENTER();
+    }
     mp_uos_dupterm_tx_strn(str, len);
 }
 
@@ -106,7 +129,7 @@ void mp_hal_delay_ms(uint32_t ms) {
             break;
         }
         MICROPY_EVENT_POLL_HOOK
-        vTaskDelay(1);
+        ulTaskNotifyTake(pdFALSE, 1);
     }
     if (dt < us) {
         // do the remaining delay accurately
@@ -139,18 +162,18 @@ void mp_hal_delay_us(uint32_t us) {
     }
 }
 
-// this function could do with improvements (eg use ets_delay_us)
-void mp_hal_delay_us_fast(uint32_t us) {
-    uint32_t delay = ets_get_cpu_frequency() / 19;
-    while (--us) {
-        for (volatile uint32_t i = delay; i; --i) {
-        }
-    }
-}
-
 /*
 extern int mp_stream_errno;
 int *__errno() {
     return &mp_stream_errno;
 }
 */
+
+// Wake up the main task if it is sleeping
+void mp_hal_wake_main_task_from_isr(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(mp_main_task_handle, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken == pdTRUE) {
+        portYIELD_FROM_ISR();
+    }
+}

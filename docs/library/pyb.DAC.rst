@@ -79,7 +79,7 @@ Methods
 .. method:: DAC.init(bits=8, \*, buffering=None)
 
    Reinitialise the DAC.  *bits* can be 8 or 12.  *buffering* can be
-   ``None``, ``False`` or ``True`; see above constructor for the meaning
+   ``None``, ``False`` or ``True``; see above constructor for the meaning
    of this parameter.
 
 .. method:: DAC.deinit()
@@ -93,9 +93,9 @@ Methods
 
 .. method:: DAC.triangle(freq)
 
-   Generate a triangle wave.  The value on the DAC output changes at
-   the given frequency, and the frequency of the repeating triangle wave
-   itself is 2048 times smaller.
+   Generate a triangle wave.  The value on the DAC output changes at the given
+   frequency and ramps through the full 12-bit range (up and down). Therefore
+   the frequency of the repeating triangle wave itself is 8192 times smaller.
 
 .. method:: DAC.write(value)
 
